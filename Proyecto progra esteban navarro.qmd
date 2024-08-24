@@ -1,0 +1,133 @@
+---
+title: "proyectofinalesteban"
+format: pdf
+---
+
+```{python}
+import os
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+
+```
+```{python}
+# Configuración del driver
+driver = webdriver.Chrome()
+
+# Navegar al sitio web
+driver.get("https://books.toscrape.com/")
+
+# Esperar a que los elementos estén presentes
+espera = WebDriverWait(driver, 10)
+elementos_libros = espera.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product_pod")))
+
+# Extraer datos
+libros = []
+while True:
+    sopa = BeautifulSoup(driver.page_source, 'html.parser')
+    elementos_libros = sopa.find_all('article', class_='product_pod')
+
+    for libro in elementos_libros:
+        titulo = libro.h3.a['title']
+        precio = libro.find('p', class_='price_color').text
+        calificacion = libro.p['class'][1]
+        libros.append({'title': titulo, 'price': precio, 'rating': calificacion})
+
+    # Intentar ir a la siguiente página
+    boton_siguiente = sopa.find('li', class_='next')
+    if boton_siguiente:
+        url_siguiente_pagina = boton_siguiente.a['href']
+        driver.get('https://books.toscrape.com/catalogue/' + url_siguiente_pagina)
+    else:
+        break
+
+driver.quit()
+
+# Guardar los datos en un archivo CSV
+df_libros = pd.DataFrame(libros)
+ruta_archivo = os.path.join(os.getcwd(), "libros.csv")
+df_libros.to_csv(ruta_archivo, index=False)
+df_libros.head()
+  
+```
+```{python}
+from flask import Flask, jsonify, request
+import pandas as pd
+
+app = Flask(__name__)
+import pandas as pd
+
+
+
+@app.route('/libros', methods=['GET'])
+def get_books():
+    df_libros = pd.read_csv("C:\\Users\\f\\Documents\\avdata\\nayib\\libros.csv")
+    filtro = request.args.get('rating')
+    if filtro:
+        datos_filtrados = df_libros[df_libros['rating'] == filtro]
+    else:
+        datos_filtrados = df_libros
+    return jsonify(datos_filtrados.to_dict(orient='records'))
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+```
+
+
+```{python}
+import requests
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Consumir la API
+try:
+    respuesta = requests.get('http://127.0.0.1:5000/libros')
+    respuesta.raise_for_status()  # Lanza una excepción para errores HTTP
+    datos_libros = respuesta.json()
+    
+    if not datos_libros:  # Verifica si la respuesta está vacía
+        raise ValueError("La respuesta de la API está vacía.")
+    
+    # Convertir a DataFrame
+    df_libros = pd.DataFrame(datos_libros)
+    
+    # Crear gráficos
+    # Gráfico categórico: conteo de libros por calificación
+    sns.countplot(x='rating', data=df_libros)
+    plt.title('Conteo de Libros por Calificación')
+    plt.show()
+
+    # Gráfico relacional: precio vs calificación
+    df_libros['price'] = df_libros['price'].str.replace('£', '').astype(float)
+    sns.scatterplot(x='price', y='rating', data=df_libros)
+    plt.title('Precio vs Calificación')
+    plt.show()
+
+    # Gráfico de distribución: distribución de precios
+    sns.histplot(df_libros['price'], kde=True)
+    plt.yticks([ymax * 0.2, ymax * 0.4, ymax * 0.6, ymax * 0.8, ymax], 
+           ['one', 'two', 'three', 'four', 'five'])
+
+    plt.title('Distribución de Precios de los Libros')
+    plt.show()
+
+except requests.RequestException as e:
+    print(f"Error al realizar la solicitud a la API: {e}")
+except ValueError as e:
+    print(f"Error en los datos de la API: {e}")
+except Exception as e:
+    print(f"Ocurrió un error inesperado: {e}")
+
+
+#reflexion y link de github
+
+## He aprendi bastante al realizar este proyecto, en especial sobre como se conforman nuestras pags web y como es necesario conocer su estructuracion para el minado de datos en ellas, en lo personal ha sido muy interesante ver todas las formas en la que se pueden extraer datos de ellas con las librerias adecuadas, asi como la utilidad de las api y como estas solicitudes de datos se pueden usar de tantisimas maneras
+# repositorio = https://github.com/estebanrzk/Proyecto_final.git
+
+```
+
